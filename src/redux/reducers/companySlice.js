@@ -1,13 +1,14 @@
 import { createSlice } from "@reduxjs/toolkit";
-import { createBrowserHistory } from "history";
-
-const history = createBrowserHistory();
 
 export const companySlice = createSlice({
   name: "companies",
   initialState: {
     isLoading: false,
+    showToaster: false,
     companies: [],
+    count: 0,
+    from: null,
+    to: null,
     error: {
       name: null,
       email: null,
@@ -21,7 +22,8 @@ export const companySlice = createSlice({
     },
 
     getCompaniesSuccess: (state, action) => {
-      state.companies = action.payload;
+      state.companies = action.payload.data;
+      state.count = action.payload.total;
       state.isLoading = false;
     },
 
@@ -35,37 +37,15 @@ export const companySlice = createSlice({
 
     createCompaniesSuccess: (state, action) => {
       state.isLoading = false;
+      state.showToaster = true;
     },
 
     createCompaniesError: (state) => {
       state.isLoading = false;
     },
 
-    formValidationError: (state, action) => {
-      state.isLoading = false;
-      state.error.name = action.payload.errors.nameError;
-      state.error.email = action.payload.errors.emailError;
-    },
-
-    formValidationSuccess: (state, action) => {
-      state.isLoading = false;
-      state.error.name = null;
-      state.error.email = null;
-    },
-
-    serverSideError: (state, action) => {
-      state.isLoading = false;
-      if (action.payload) {
-        state.error.name = action.payload.name;
-        state.error.email = action.payload.email;
-      } else {
-        state.error.name = null;
-        state.error.email = null;
-      }
-    },
-
-    redirectSlice: (state, action) => {
-      history.push("/");
+    hideToaster: (state) => {
+      state.showToaster = false;
     },
   },
 });
@@ -77,10 +57,7 @@ export const {
   createCompaniesStart,
   createCompaniesSuccess,
   createCompaniesError,
-  formValidationError,
-  formValidationSuccess,
-  serverSideError,
-  redirectSlice,
+  hideToaster
 } = companySlice.actions;
 
 export default companySlice.reducer;

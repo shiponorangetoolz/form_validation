@@ -1,30 +1,37 @@
-import {
-  all,
-  call,
-  put,
-  takeEvery,
-  takeLatest,
-  fork,
-  delay,
-} from "redux-saga/effects";
+import { all, call, put, takeEvery, fork, delay } from "redux-saga/effects";
 import {
   getCompaniesSuccess,
   getCompaniesError,
   createCompaniesSuccess,
-  formValidationError,
-  formValidationSuccess,
-  serverSideError,
-  redirectSlice,
+  hideToaster,
 } from "../reducers/companySlice";
 import { getCompaniesAPI, createCompanyAPI } from "../../Api";
+import { validateEmail } from "../../helper/isEmailValidate";
+import { isValidUrl } from "../../helper/isValidUrl";
+import { isPhoneValid } from "../../helper/isPhoneValid";
+import {
+  companyFormValidationError,
+  companyFormValidationSuccess,
+  companyServerSideError,
+} from "../reducers/errorSlice";
+import {
+  showToaster
+} from "../reducers/toasterSlice";
 
+// Watchers
+
+function* companySaga() {
+  yield takeEvery("companies/getCompaniesStart", getCompaniesDatas);
+  yield takeEvery("companies/createCompaniesStart", createCompaniesSaga);
+}
 
 // Sagas
 
-function* getCompaniesDatas() {
+function* getCompaniesDatas(action) {
+  // console.log(action.payload,"...page payload")
   try {
-    const { data } = yield call(getCompaniesAPI);
-    yield put(getCompaniesSuccess(data.data));
+    const { data } = yield call(getCompaniesAPI, action.payload);
+    yield put(getCompaniesSuccess(data));
   } catch (error) {
     yield put(getCompaniesError());
   }
@@ -34,41 +41,65 @@ function* createCompaniesSaga({ payload }) {
   let errors = {
     nameError: null,
     emailError: null,
+    webAddressError: null,
+    phoneError: null,
   };
 
-  const validateEmail = (email) => {
-    return email.match(
-      /^(([^<>()[\]\\.,;:\s@\"]+(\.[^<>()[\]\\.,;:\s@\"]+)*)|(\".+\"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/
-    );
-  };
+  // trim values
+  const name = payload.data.name.trim();
+  const email = payload.data.email;
+  const webAddress = payload.data.webAddress.trim();
+  const phone = payload.data.phone.trim();
 
-  if (!payload.data.name) {
+  // validate name
+  if (!name) {
     errors.nameError = "Name is required";
-  } else if (payload.data.name.length <= 2) {
+  } else if (name.length <= 2) {
     errors.nameError = "Name must be greater than 2 characters";
   }
 
-  if (!payload.data.email) {
+  // validate web address
+  if (!webAddress) {
+    errors.webAddressError = "Web Address is required";
+  } else if (!isValidUrl(webAddress)) {
+    errors.webAddressError = "Web Address is not valid";
+  }
+
+  // validate email
+  if (!email) {
     errors.emailError = "Email is required";
-  } else if (!validateEmail(payload.data.email)) {
+  } else if (!validateEmail(email)) {
     errors.emailError = "Email is not valid";
   }
 
-  if (errors.nameError !== null || errors.emailError !== null) {
-    yield put(formValidationError({ errors }));
+  // validate phone
+  if (!phone) {
+    errors.phoneError = "Phone is required";
+  } else if (!isPhoneValid(phone)) {
+    errors.phoneError = "Phone is not valid";
+  }
+
+  if (
+    errors.nameError !== null ||
+    errors.emailError !== null ||
+    errors.webAddressError !== null ||
+    errors.phoneError !== null
+  ) {
+    yield put(companyFormValidationError({ errors }));
   } else {
-    yield put(formValidationSuccess());
+    yield put(companyFormValidationSuccess());
     try {
       const data = yield call(createCompanyAPI, payload.data);
 
-      if (data.status == 201) {
+      if (data.status === 201) {
+        yield put(showToaster());
         yield delay(500);
         payload.navigate("/");
       } else if (data.data.validator_error) {
-        console.log("vals", data.data.validator_error);
-        yield put(serverSideError(data.data.validator_error));
+        yield put(
+          companyServerSideError({ serverErr: data.data.validator_error })
+        );
       }
-
       yield put(createCompaniesSuccess());
     } catch (error) {
       console.log(error, "....server error ");
@@ -76,17 +107,6 @@ function* createCompaniesSaga({ payload }) {
   }
 }
 
-// Watchers
-
-function* companySaga() {
-  yield takeEvery("companies/getCompaniesStart", getCompaniesDatas);
-}
-
-function* createCompanySaga() {
-  yield takeEvery("companies/createCompaniesStart", createCompaniesSaga);
-}
-
 export default function* contactSaga() {
   yield all([fork(companySaga)]);
-  yield all([fork(createCompanySaga)]);
 }
